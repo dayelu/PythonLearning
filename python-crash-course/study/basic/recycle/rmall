@@ -1,0 +1,16 @@
+#!/usr/bin/python3
+
+list = ['baozi','mantou','baozi','mi','mian','mi','mian','damo','baozi','baozi']
+
+print("There\'s some foods,they are:")
+
+print(list)
+
+dislike = input("what do you dislike?\n ")
+
+while dislike in list:
+ list.remove(dislike)
+
+print("There remains :")
+
+print(list)

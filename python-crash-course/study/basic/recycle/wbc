@@ -1,0 +1,15 @@
+#!/usr/bin/python3
+
+list = ['liu','li','wang','huang']
+
+flag = True	#python中布尔值唯一写法：True , False
+
+while flag:
+ name = input("please enter your first name\n")
+ if name not in list:
+  if name == 'zhang':
+   break
+  else:
+   print('who are you?')
+ else:
+  continue
