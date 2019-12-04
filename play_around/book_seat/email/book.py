@@ -44,14 +44,20 @@ class SeatBook(object):
 		if not os.path.exists(self.logs_dir):
 			os.makedirs(self.logs_dir)
 		
-		LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"    # 日志格式化输出
-		DATE_FORMAT = "%Y-%m-%d %H:%M:%S %p"                        # 日期格式
+		LOG_FORMAT = "%(asctime)s - %(levelname)s - %(lineno)d - %(funcName)s - %(message)s"    # 日志格式化输出
+		DATE_FORMAT = "%Y-%m-%d %H:%M:%S"                        # 日期格式
 		fp = logging.FileHandler(self.logfile, encoding='utf-8')
 		fs = logging.StreamHandler()
 		logging.disable(logging.DEBUG)			# 禁用日志输出debug
 		# basicConfig 是全局设置，无需对每个Logger对象重新设置
-		# logging.basicConfig(format=LOG_FORMAT, datefmt=DATE_FORMAT, handlers=[fp, fs])
-		logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT, datefmt=DATE_FORMAT, handlers=[fp, fs])
+		logging.basicConfig(
+					# filename=self.logfile,
+                    # filemode='w',
+                    level=logging.DEBUG,
+                    format=LOG_FORMAT,
+                    datefmt=DATE_FORMAT,
+                    handlers=[fp, fs]		# 控制控制台输出与否
+                    )
 
 		if not os.path.exists(self.seatfiles):
 			os.makedirs(self.seatfiles)
@@ -65,28 +71,21 @@ class SeatBook(object):
 		try:
 
 			if (len(network) > 2 ) or (len(network) < 1 ):
-				
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
-					"参数错误，至少有一个参数")
-
+				logging.error("参数错误，至少有一个参数")
 				sys.exit()
 
 			url = network[0]
 			payload = None if len(network) == 1 else network[1]
 
 			session = requests.Session()	# 创建一个session会话
-
 			session.mount('http://',HTTPAdapter(max_retries=3))
 			session.mount('https://',HTTPAdapter(max_retries=3))	# 绑定一个 HTTPHTTPAdapter 对象，设置重连次数
-
 			response = session.get(url,params=payload,timeout=(6,3))	# 设置连接（connect）超时为 6s，响应超时（read）为 3s 
 			# 实践证明,将连接超时限制在 6s 之外更有机会成功,3s 基本失败,至于超时重连的时间 与 成功率的关系有待于更多的测试
 
 			if response.status_code == 200:
 				# 首先通过正则表达式去除字典中htm标签，然后把unicode码转换为中文字符
 				res = re.sub(r'<br \W\W>',' ',str(response.text)).encode('utf-8').decode('unicode_escape')	
-	
 				json_obj = json.loads(res)		# 将字符串类型的数据转化为 python 字典类型的数据，或者说json数据
 
 				return json_obj
@@ -129,9 +128,7 @@ class SeatBook(object):
 		''' 获取违约信息 '''
 		try:
 
-			res_data = self.login_body()
-
-			access_token = res_data['data']['_hash_']['access_token']
+			access_token = self.login()
 
 			url = self.ip_addr + 'profile/reneges'
 
@@ -140,7 +137,7 @@ class SeatBook(object):
 						'userid' : self.username
 						}
 
-			data = self.visit_net(url,payload)		
+			data = self.visit_net(url,payload)
 
 			if data['status'] == 1:
 				return data['data']['list']
@@ -152,9 +149,7 @@ class SeatBook(object):
 		''' 用户基本信息 '''
 		try:
 
-			res_data = self.login_body()
-
-			access_token = res_data['data']['_hash_']['access_token']
+			access_token = self.login()
 
 			url = self.ip_addr + 'profile'
 
@@ -166,6 +161,7 @@ class SeatBook(object):
 			data = self.visit_net(url,payload)
 
 			if data['status'] == 1:
+
 				return data['data']['list']
 
 		except Exception as e:
@@ -176,9 +172,7 @@ class SeatBook(object):
 		try:
 			tips = {}
 
-			res_data = self.login_body()
-
-			access_token = res_data['data']['_hash_']['access_token']
+			access_token = self.login()
 
 			url = self.ip_addr + 'profile/books'
 
@@ -188,7 +182,7 @@ class SeatBook(object):
 						}
 
 			data = self.visit_net(url,payload)
-							
+
 			if data['status'] == 1:
 
 				nowdate = time.strftime('%Y-%m-%d',time.localtime())
@@ -198,7 +192,6 @@ class SeatBook(object):
 				failure = "今日预约情况: 今天未预约或预约失败！"
 
 				res = success if nowdate == last_data else failure
-
 				return res
 
 		except Exception as e:
@@ -237,12 +230,8 @@ class SeatBook(object):
 				return data
 
 			elif data['status'] == 2:		# 被拉黑
-				
-				self.mail(data['msg'])
-
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
-					data['msg'])	
+				self.mail(data['msg'])		# 邮件告知真相
+				logging.error(data['msg'])
 
 				sys.exit()
 
@@ -255,13 +244,10 @@ class SeatBook(object):
 		try:
 			
 			filename = "login.json"
-
 			json_file = os.path.join(self.apis_json,filename)
-
 			file_exist = os.path.exists(json_file)
 
 			if file_exist:
-
 				with open(json_file,"r") as f_obj:
 					data = json.load(f_obj)
 
@@ -271,7 +257,6 @@ class SeatBook(object):
 			now_time = int(time.time())		# 初始化
 
 			if file_exist and (now_time < expire_time):		# 文件存在并且 token 未失效不更新json文件
-
 				write_result = data
 
 			else:		# 当今仅当 login.json 文件不存在且登录成功时才 写入 数据
@@ -376,11 +361,7 @@ class SeatBook(object):
 			}
 
 			if data['day'] in [0,None]:
-
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
-					"未获取可预约日期参数!")	
-
+				logging.error("未获取可预约日期参数!")
 				sys.exit()
 
 			filename = "space_time_buckets.json"
@@ -402,10 +383,7 @@ class SeatBook(object):
 				in_data = self.visit_net(url,payload)
 
 				if in_data['status'] == 0:
-
-					logging.error(sys._getframe().f_code.co_name + " : " \
-							+ str(sys._getframe().f_lineno) +"\t|\t" + \
-							"当前时间不处于预约时间段,请于第二天 5:58 后重试!")
+					logging.error("当前时间不处于预约时间段,请于第二天 5:58 后重试!")
 
 					sys.exit()
 
@@ -422,6 +400,7 @@ class SeatBook(object):
 	def spaces(self, seatId):
 		''' 获取空间详情 '''
 		try:
+
 			url = self.ip_addr + 'spaces/' + str(seatId)
 			data = self.visit_net(url)
 
@@ -446,8 +425,7 @@ class SeatBook(object):
 
 			if room_name not in rooms.keys():
 
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
+				logging.error(
 					"您的输入有误,自习室名仅有如下几个: " + \
 					"(" + ", ".join(rooms.keys()) + ")")
 
@@ -472,11 +450,7 @@ class SeatBook(object):
 			data = self.space_time_buckets(areaId)
 
 			if not data:
-
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
-					"未获取可预约时间段参数！")
-
+				logging.error("未获取可预约时间段参数！")
 				sys.exit()
 
 			url = self.ip_addr + 'spaces_old'
@@ -525,11 +499,7 @@ class SeatBook(object):
 				data = self.space_time_buckets(areaId)
 
 				if not data:
-
-					logging.error(sys._getframe().f_code.co_name + " : " \
-						+ str(sys._getframe().f_lineno) +"\t|\t" + \
-						"未获取可预约时间段参数！")
-
+					logging.error("未获取可预约时间段参数！")
 					sys.exit()
 
 				url = self.ip_addr + 'spaces_old'
@@ -598,8 +568,7 @@ class SeatBook(object):
 
 			if (seat_no < 1) or (seat_no > len(seats_info)):
 
-				logging.error(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
+				logging.error(
 					"您输入的座位号有误，" + self.room_name + '的座位号范围在 (1 - ' + \
 					str(len(seats_info)) + ') 之间')
 
@@ -631,20 +600,14 @@ class SeatBook(object):
 			stb_data = self.space_time_buckets(seat_info['area_id'])
 			
 			if not stb_data:
-
-				logging.error(sys._getframe().f_code.co_name + " : " \
-						+ str(sys._getframe().f_lineno) +"\t|\t" + \
-						"未获取可预约时间段参数！")
+				logging.error("未获取可预约时间段参数！")
 
 				sys.exit()
 
 			passwd_hash = self.login()
 
 			if not passwd_hash:
-
-				logging.error(sys._getframe().f_code.co_name + " : " \
-						+ str(sys._getframe().f_lineno) +"\t|\t" + \
-						"登录异常!")
+				logging.error("登录异常!")
 
 				sys.exit()
 
@@ -676,13 +639,10 @@ class SeatBook(object):
 				os.remove("apis_json/login.json")
 				data = self.book_new(seat_no=seat_no)
 
-			res = data['msg'] if data else None	# python 中类似其他语言的三目运算符语法
-			
-			seat = self.room_name + "\t" + str(seat_no) + "\t"
+			res = "预约结果：" + data['msg'] if data else None	# python 中类似其他语言的三目运算符语法
+			seat = "预约座位：" + self.room_name + " | " + str(seat_no) + " - "
 
-			logging.info(sys._getframe().f_code.co_name + " : " \
-					+ str(sys._getframe().f_lineno) +"\t|\t" + \
-					seat + res)
+			logging.info(seat + res)
 
 			return 	res
 
@@ -717,30 +677,32 @@ class SeatBook(object):
 		return ret
 
 
-	def areas_test(self, tree=1):
-		''' 获取区域信息 '''
+   def areas_test(self, tree=1):
+		'''
+		测试接口，获取空间信息
+		'''
 		try:
 
-			room_names = []
+		       room_names = []
 
-			payload = { 'tree' : tree }
-			url = self.ip_addr + 'areas'
+		       payload = { 'tree' : tree }
+		       url = self.ip_addr + 'areas'
 
-			in_data = self.visit_net(url,payload)
-			area_info = in_data['data']['list'][0]['_child']
+		       in_data = self.visit_net(url,payload)
+		       area_info = in_data['data']['list'][0]['_child']
 
-			for child in area_info:
+		       for child in area_info:
 
-				if '_child' in child.keys():
+		               if '_child' in child.keys():
 
-					for item in child['_child']:
-						
-						room_names.append(item)
+		                       for item in child['_child']:
 
-			return room_names
+		                               room_names.append(item)
+
+		       return room_names
 
 		except Exception as e:
-			print(e)
+		       print(e)
 
 
 
@@ -751,7 +713,6 @@ def main():
 	try:
 
 		sb = SeatBook()
-
 		flag = True
 
 		stime = time.time()
