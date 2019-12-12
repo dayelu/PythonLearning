@@ -1,12 +1,16 @@
 import os
+import sys
 import time
+# import aiohttp
+import asyncio
+# import uvloop
 import logging
 import datetime
 import requests
 from threading import Thread
 from bs4 import BeautifulSoup
 
-logfile = "thredsp1.log"
+logfile = "coro.log"
 logger = logging.getLogger(__name__)                   # 初始化一个 Logger 对象
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(lineno)d - %(funcName)s - %(threadName)s - %(thread)d - %(message)s"    # 日志格式化输出
@@ -33,33 +37,6 @@ if not os.path.exists(f"bydaily2/{tdate}/"):
   os.makedirs(f"bydaily2/{tdate}/")
 
 
-def all_pic(url_head):
-    """
-        所有图片下载
-    """
-    try:
-
-        pages = get_pages(url_head)
-        urls =[f'{url_head}?p={page}' for page in range(1,int(pages)+1)]
-
-        threads = []
-
-        for pic_url in urls:
-
-            t = Thread(target=page_pic,
-                args=(pic_url,)
-                )
-
-            threads.append(t)
-
-        for thr in threads:
-            thr.start()
-
-        for thr in threads:
-            thr.join(timeout=30)
-
-    except Exception as e:
-        logging.info(e)
 
 def get_pages(url_head):
     """
@@ -79,40 +56,7 @@ def get_pages(url_head):
         logging.info(e)
 
 
-
-def page_pic(page_url):
-    """
-        每页图片下载
-    """
-    try:
-
-        res = requests.get(page_url, stream=True) #(1)
-        soup = BeautifulSoup(res.text,features="html.parser")
-
-        pic_urls = soup.select(".container .item .card img")
-
-        threads = []
-
-        for pic in pic_urls:
-
-            t = Thread(target=download_from_url,
-                args=(pic.get("src"),pic.get("src").split("/")[-1])
-                )
-
-            threads.append(t)
-
-        for thr in threads:
-            thr.start()
-
-        for thr in threads:
-            thr.join(timeout=30)
-
-    except Exception as e:
-        logging.info(e)
-
-
-
-def download_from_url(url, dst):
+async def download_from_url_async(url, dst):
 
     try:
 
@@ -145,7 +89,7 @@ def download_from_url(url, dst):
 
 	                f.write(chunk)
 
-	    # logging.info("nothing wrong")
+	    # logging.debug("nothing wrong")
 
 	    print(f"Pitture {dst} download finished!")
 
@@ -154,11 +98,50 @@ def download_from_url(url, dst):
     except Exception as e:
         logging.info(e)
 
+async def page_pic_async(page_url):
+    """
+        每页图片下载
+    """
+    try:
+
+        res = requests.get(page_url, stream=True) #(1)
+        soup = BeautifulSoup(res.text,features="html.parser")
+
+        pic_urls = soup.select(".container .item .card img")
+
+        tasks = [asyncio.create_task(download_from_url_async(pic.get("src"), pic.get("src").split("/")[-1])) for pic in pic_urls]
+
+        for task in tasks:
+        	await task
+
+    except Exception as e:
+        logging.info(e)
+
+
+async def all_pic_async(url_head):
+    """
+        所有图片下载
+    """
+    try:
+
+        pages = get_pages(url_head)
+        urls =[f'{url_head}?p={page}' for page in range(1,int(pages)+1)]
+
+        tasks = [asyncio.create_task(page_pic_async (url)) for url in urls]
+
+        for task in tasks:
+        	await task
+
+    except Exception as e:
+        logging.info(e)
+
+
 
 url_head = "https://bing.ioliu.cn/"
 
-# page_pic(url_head)
-all_pic(url_head)
+# asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+asyncio.run(all_pic_async(url_head), debug=False)
+
 
 end = time.time()
 utime = int(end - start)

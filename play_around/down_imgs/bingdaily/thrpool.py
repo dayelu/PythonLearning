@@ -109,9 +109,9 @@ def thrpools(page_url):
             futus = [executor.submit(download_from_url, pic.get("src"), pic.get("src").split("/")[-1]) for pic in pic_urls]
 
             for future in futus:
-                future.result()
+                future.result(timeout=30)
 
-    except Exception as e:
+    except concurrent.futures.TimeoutError as e:
         logging.error(e)
 
 
@@ -129,9 +129,9 @@ def all_pic_by_pool(url_head):
             futus = [executor.submit(thrpools, pic_url) for pic_url in urls]
 
             for future in futus:
-                future.result()
+                future.result(timeout=30)
 
-    except Exception as e:
+    except concurrent.futures.TimeoutError as e:
         logging.error(e)
 
 url_head = "https://bing.ioliu.cn/"
