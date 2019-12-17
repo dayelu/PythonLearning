@@ -1,7 +1,9 @@
+#!/bin/python
 import re
+import os
+import sys
 
-
-def add_contents(in_file,out_file='improve.md'):
+def add_contents(in_file,out_file):
     """
         添加直达目录
     """
@@ -13,6 +15,9 @@ def add_contents(in_file,out_file='improve.md'):
     with open(in_file, "r",encoding="utf-8") as f:
         lines = f.readlines()
 
+    tno_regx = r"(#){1,5} ((\d){1,2}\.((\d){1,2}\.)*(\d){1,2}|(\d){1,2}\.)"
+    
+    
     tno_regx = r"(#){1,5} ((\d){1,2}\.((\d){1,2}\.)*(\d){1,2}|(\d){1,2}\.)"
     title_regx = r"(#){1,5} ((\d){1,2}\.((\d){1,2}\.)*(\d){1,2}|(\d){1,2}\.)(.)*"
 
@@ -38,13 +43,30 @@ def add_contents(in_file,out_file='improve.md'):
 
 
     nf.close()
-    print("直达目录添加完毕!")
+    print(f"File {in_file} contents has been added!")
 
 
-def modify_title_style(in_file,out_file='improve.md'):
+def modify_title_style(in_file):
     """
         根据原文修改标题样式
     """
+    if not os.path.exists(in_file):
+        print("File doesn't exist, please ensure it again.")
+        return
+
+    if not (".md" in in_file and in_file.split(".")[-1] == "md"):
+        print("The type of the file is not markdown, please ensure agin.\n")
+        return
+
+    filename = in_file[:-3]
+    out_file = f"{filename}_new.md"
+
+    if os.path.exists(out_file):
+        os.remove(out_file)
+
+    # 添加直达目录
+    add_contents(in_file,out_file)
+
     outf = open(out_file, "a",encoding="utf-8")
 
     with open(in_file, "r",encoding="utf-8") as f:
@@ -75,9 +97,23 @@ def modify_title_style(in_file,out_file='improve.md'):
 
     outf.close()
 
-    print("原文修改标题样式修改完毕!")
+    print(f"File {in_file} title mark has been added!")
 
-file = "seat_book.md"
+def main():
+    # python 没有 && 符号，哈哈
+    if len(sys.argv) == 1:
+        files = input("Please input a markdown filename: \n")
+    elif len(sys.argv) == 2:
+        files = sys.argv[1]
+    else:
+        files = sys.argv[1:]
 
-add_contents(file)
-modify_title_style(file)
+    if type(files) == str:
+        modify_title_style(files)
+    else:
+        for file in files:
+            modify_title_style(file)
+            print()
+
+if __name__ == '__main__':
+    main()
